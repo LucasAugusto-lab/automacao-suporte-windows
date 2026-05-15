@@ -32,3 +32,7 @@ O script conta com um menu interativo com 30 opções divididas em pilares funda
 
 ---
 *Desenvolvido para otimizar o tempo de resposta em chamados de infraestrutura e service desk.*
+
+## 💾 Download Direto
+
+[![Download](https://img.shields.io/badge/Download-Suporte.bat-blue?style=for-the-badge&logo=windows)](sha256:de6ee33ff5a786e7bc8ff70cb1f8363dd417ef207721cc7f7cec77edbd763b9e)
