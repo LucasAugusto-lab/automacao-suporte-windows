@@ -1,0 +1,401 @@
+@echo off
+setlocal EnableExtensions EnableDelayedExpansion
+title MENU DE SUPORTE -  Automacao
+color 0B
+chcp 65001 >nul
+
+::==========================
+:: Auto-elevação p/ Admin
+::==========================
+net session >nul 2>&1
+if not %errorlevel%==0 (
+  echo Solicitando privilegios de administrador...
+  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+  exit /b
+)
+
+::==========================
+:: Log
+::==========================
+set "LOG=%TEMP%\suporte_ti.log"
+if not exist "%LOG%" (
+  echo [%%] Log de Suporte TI > "%LOG%"
+)
+
+::==========================
+:: Menu
+::==========================
+:MENU
+cls
+echo ======================================================
+echo             - MENU DO SUPORTE TECNICO -
+echo                   --  AUTOMACAO --
+echo ======================================================
+echo.
+echo  1. Verificar/Agendar CHKDSK
+echo  2. Reparar Arquivos de Sistema (SFC)
+echo  3. Limpar Arquivos Temporarios (%TEMP%)
+echo  4. Diagnostico de Memoria (reinicia)
+echo  5. Teste de Rede (Ping + DNS)
+echo  6. Gerenciador de Tarefas
+echo  7. Windows Update (iniciar busca / abrir tela)
+echo  8. Informacoes do Sistema
+echo  9. Limpar Cache DNS
+echo 10. Reset da Pilha de Rede (winsock/ip) [reinicio requerido]
+echo 11. Otimizar Disco (/C /O - HDD/SSD)
+echo 12. Firewall do Windows (Mostrar/Ativar/Desativar)
+echo 13. Visualizar Logs de Eventos
+echo 14. Teste de Velocidade de Disco (WinSAT)
+echo 15. Criar Ponto de Restauracao
+echo 16. Atualizar Programas (winget upgrade --all)
+echo 17. Forcar Politicas de Grupo (gpupdate /force)
+echo 18. Ativar Conta Administrador Local
+echo 19. Drivers Ocultos (Gerenciador)
+echo 20. Testar comunicacao com maquina na rede
+echo 21. Exibir IPConfig detalhado
+echo 22. Testar portas comuns (3389, 445, 80, 443, 53, 22)
+echo 23. Renovar IP e limpar cache ARP
+echo 24. Reset do Windows Update (limpar componentes)
+echo 25. Limpar Spooler de Impressao (fila de impressao)
+echo 26. Flush + Re-register DNS
+echo 27. Ver conexoes ativas (netstat -ano)
+echo 28. Backup de drivers (pnputil /export-driver)
+echo 29. Sincronizar hora (w32tm /resync)
+echo 30. Sair
+echo ======================================================
+set /p opcao=Escolha uma opcao (1-30): 
+
+if not defined opcao goto MENU
+set "opcao=%opcao:"=%"
+for /f "delims=0123456789" %%A in ("%opcao%") do goto MENU
+if %opcao% LSS 1 goto MENU
+if %opcao% GTR 30 goto MENU
+
+set "STAMP=%DATE% %TIME%"
+echo [%STAMP%] Opcao %opcao% selecionada >> "%LOG%"
+
+if "%opcao%"=="30" goto SAIR
+call :OPC_%opcao%
+goto MENU
+
+::==========================
+:: Funções
+::==========================
+:OPC_1
+echo CHKDSK pode exigir reinicio e bloquear a unidade do SO.
+choice /M "Deseja verificar e, se necessario, agendar CHKDSK /F no proximo boot?"
+if errorlevel 2 goto :EOF
+echo Executando: chkdsk C: /F
+echo [%DATE% %TIME%] chkdsk C: /F >> "%LOG%"
+chkdsk C: /F
+pause
+goto :EOF
+
+:OPC_2
+echo Executando SFC /scannow (pode levar alguns minutos)...
+echo [%DATE% %TIME%] sfc /scannow >> "%LOG%"
+sfc /scannow
+pause
+goto :EOF
+
+:OPC_3
+echo Limpando arquivos temporarios de %%TEMP%% ...
+echo [%DATE% %TIME%] limpar TEMP >> "%LOG%"
+pushd "%TEMP%"
+del /f /s /q *.* >nul 2>&1
+for /d %%D in (*) do rd /s /q "%%D" >nul 2>&1
+popd
+echo Concluido.
+pause
+goto :EOF
+
+:OPC_4
+echo O Diagnostico de Memoria requer reinicio.
+choice /M "Agendar e reiniciar agora?"
+if errorlevel 2 goto :EOF
+echo [%DATE% %TIME%] mdsched >> "%LOG%"
+mdsched
+goto :EOF
+
+:OPC_5
+echo Teste rapido de conectividade...
+echo [%DATE% %TIME%] ping 1.1.1.1; ping 8.8.8.8; nslookup >> "%LOG%"
+ping 1.1.1.1 -n 4
+ping 8.8.8.8 -n 4
+nslookup www.microsoft.com
+pause
+goto :EOF
+
+:OPC_6
+start "" taskmgr
+goto :EOF
+
+:OPC_7
+echo Iniciando busca por atualizacoes (Win10/11)...
+echo [%DATE% %TIME%] Windows Update StartScan >> "%LOG%"
+powershell -NoProfile -Command "Start-Process 'usoclient.exe' -ArgumentList 'StartScan' -WindowStyle Hidden" 2>nul
+start ms-settings:windowsupdate
+pause
+goto :EOF
+
+:OPC_8
+systeminfo | more
+pause
+goto :EOF
+
+:OPC_9
+echo Limpando cache DNS...
+echo [%DATE% %TIME%] ipconfig /flushdns >> "%LOG%"
+ipconfig /flushdns
+pause
+goto :EOF
+
+:OPC_10
+echo Esta acao vai redefinir Winsock e pilha IP. Reinicio sera necessario.
+choice /M "Deseja continuar?"
+if errorlevel 2 goto :EOF
+echo [%DATE% %TIME%] netsh resets >> "%LOG%"
+netsh winsock reset
+netsh int ip reset
+echo Concluido. Reinicie o computador.
+pause
+goto :EOF
+
+:OPC_11
+echo Otimizando todas as unidades de forma adequada (/C /O)...
+echo [%DATE% %TIME%] defrag /C /O >> "%LOG%"
+defrag /C /O /U /V
+pause
+goto :EOF
+
+:OPC_12
+echo Estado atual do Firewall:
+netsh advfirewall show allprofiles state
+choice /C MAD /N /M "Escolha: [M]ostrar novamente  [A]tivar  [D]esativar : "
+if errorlevel 3 (
+  echo [%DATE% %TIME%] Firewall OFF >> "%LOG%"
+  choice /M "Tem certeza que deseja DESATIVAR o firewall (todas as redes)?"
+  if errorlevel 2 goto :EOF
+  netsh advfirewall set allprofiles state off
+) else if errorlevel 2 (
+  echo [%DATE% %TIME%] Firewall ON >> "%LOG%"
+  netsh advfirewall set allprofiles state on
+) else (
+  netsh advfirewall show allprofiles state
+)
+pause
+goto :EOF
+
+:OPC_13
+start "" eventvwr.msc
+goto :EOF
+
+:OPC_14
+echo Executando WinSAT disk (teste de disco)...
+echo [%DATE% %TIME%] winsat disk >> "%LOG%"
+winsat disk
+pause
+goto :EOF
+
+:OPC_15
+echo Tentando criar ponto de restauracao via PowerShell...
+echo [%DATE% %TIME%] Checkpoint-Computer >> "%LOG%"
+powershell -NoProfile -Command "Checkpoint-Computer -Description 'Ponto de Restauracao Manual' -RestorePointType 'MODIFY_SETTINGS'" 2>&1 | more
+pause
+goto :EOF
+
+:OPC_16
+echo Atualizando apps via winget (pode demorar)...
+echo [%DATE% %TIME%] winget upgrade --all >> "%LOG%"
+winget upgrade --all
+pause
+goto :EOF
+
+:OPC_17
+echo Forcando atualizacao de politicas de grupo...
+echo [%DATE% %TIME%] gpupdate /force >> "%LOG%"
+gpupdate /force
+pause
+goto :EOF
+
+:OPC_18
+echo Ativar conta Administrador local 'Administrador'...
+choice /M "Deseja ativar a conta? (use apenas em casos necessarios)"
+if errorlevel 2 goto :EOF
+echo [%DATE% %TIME%] net user administrador /active:yes >> "%LOG%"
+net user administrador /active:yes
+pause
+goto :EOF
+
+:OPC_19
+echo Exibindo dispositivos ocultos no Gerenciador...
+set devmgr_show_nonpresent_devices=1
+start "" devmgmt.msc
+echo Dica: no menu "Exibir" selecione "Mostrar dispositivos ocultos".
+pause
+goto :EOF
+
+:OPC_20
+set /p alvo=Digite o IP ou Hostname da maquina: 
+if "%alvo%"=="" (
+  echo Nao informado. Voltando ao menu.
+  timeout /t 1 >nul
+  goto :EOF
+)
+echo Testando ping em %alvo% ...
+echo [%DATE% %TIME%] teste rede: ping %alvo% >> "%LOG%"
+ping %alvo% -n 4
+
+echo.
+choice /M "Deseja fazer tracert (rota completa)?"
+if errorlevel 2 goto :skip_tracert
+tracert %alvo%
+:skip_tracert
+
+echo.
+choice /M "Deseja testar porta especifica (ex.: 3389 RDP)?"
+if errorlevel 2 goto :skip_porta
+set /p porta=Digite a porta: 
+if not "%porta%"=="" (
+  powershell -NoProfile -Command "Test-NetConnection -ComputerName '%alvo%' -Port %porta%"
+) else (
+  echo Porta nao informada. Pulando teste de porta.
+)
+:skip_porta
+echo.
+pause
+goto :EOF
+
+:OPC_21
+echo Exibindo configuracao detalhada de rede (ipconfig /all)...
+echo [%DATE% %TIME%] ipconfig /all >> "%LOG%"
+ipconfig /all | more
+pause
+goto :EOF
+
+:OPC_22
+set /p alvo=IP ou Hostname para teste de portas comuns: 
+if "%alvo%"=="" (
+  echo Nao informado. Voltando ao menu.
+  timeout /t 1 >nul
+  goto :EOF
+)
+echo [%DATE% %TIME%] teste portas comuns em %alvo% >> "%LOG%"
+powershell -NoProfile -Command ^
+  "$ports=@(3389,445,80,443,53,22);" ^
+  "$res=foreach($p in $ports){$t=Test-NetConnection -ComputerName '%alvo%' -Port $p -WarningAction SilentlyContinue;" ^
+  "  [pscustomobject]@{Port=$p; Open=$t.TcpTestSucceeded; LatencyMs=([int]($t.PingReplyDetails.RoundtripTime))}};" ^
+  "$res | Sort-Object Port | Format-Table -AutoSize"
+pause
+goto :EOF
+
+:OPC_23
+echo Liberando IP atual...
+ipconfig /release
+echo Renovando IP...
+ipconfig /renew
+echo Limpando cache ARP...
+arp -d *
+echo [%DATE% %TIME%] ipconfig release/renew + arp -d >> "%LOG%"
+echo.
+pause
+goto :EOF
+
+:OPC_24
+echo Esta opcao ira REINICIAR os componentes do Windows Update.
+choice /M "Deseja continuar?"
+if errorlevel 2 goto :EOF
+
+echo Parando servicos do Windows Update...
+net stop wuauserv >nul 2>&1
+net stop bits >nul 2>&1
+net stop cryptsvc >nul 2>&1
+net stop msiserver >nul 2>&1
+
+echo Renomeando pastas de cache (SoftwareDistribution e Catroot2)...
+set "SD=%SystemRoot%\SoftwareDistribution"
+set "CR=%SystemRoot%\System32\Catroot2"
+if exist "%SD%" ren "%SD%" "SoftwareDistribution.old" >nul 2>&1
+if exist "%CR%" ren "%CR%" "Catroot2.old" >nul 2>&1
+
+echo Limpando eventuais jobs do BITS...
+del /f /q "%ALLUSERSPROFILE%\Application Data\Microsoft\Network\Downloader\qmgr*.dat" >nul 2>&1
+
+echo Iniciando servicos novamente...
+net start msiserver >nul 2>&1
+net start cryptsvc >nul 2>&1
+net start bits >nul 2>&1
+net start wuauserv >nul 2>&1
+
+echo Disparando varredura de atualizacoes...
+powershell -NoProfile -Command "Start-Process 'usoclient.exe' -ArgumentList 'StartScan' -WindowStyle Hidden" 2>nul
+
+echo [%DATE% %TIME%] Reset Windows Update concluido >> "%LOG%"
+echo Concluido. Tente verificar atualizacoes novamente.
+pause
+goto :EOF
+
+:OPC_25
+echo Esta acao limpa a FILA de impressao local.
+choice /M "Deseja continuar?"
+if errorlevel 2 goto :EOF
+
+echo Parando Spooler de impressao...
+net stop spooler >nul 2>&1
+
+echo Limpando arquivos em %SystemRoot%\System32\spool\PRINTERS ...
+del /f /q "%SystemRoot%\System32\spool\PRINTERS\*.*" >nul 2>&1
+
+echo Iniciando Spooler...
+net start spooler >nul 2>&1
+
+echo [%DATE% %TIME%] Limpeza do Spooler concluida >> "%LOG%"
+echo Concluido.
+pause
+goto :EOF
+
+:OPC_26
+echo Executando flush e re-register de DNS...
+echo [%DATE% %TIME%] ipconfig /flushdns + /registerdns >> "%LOG%"
+ipconfig /flushdns
+ipconfig /registerdns
+echo Concluido.
+pause
+goto :EOF
+
+:OPC_27
+echo Exibindo conexoes ativas (netstat -ano)...
+echo [%DATE% %TIME%] netstat -ano >> "%LOG%"
+netstat -ano | more
+echo.
+echo Dica: associe PID ao processo no Gerenciador de Tarefas (Exibir > Colunas > PID).
+pause
+goto :EOF
+
+:OPC_28
+echo Backup dos drivers do sistema (pode demorar)...
+set "DEST=C:\BackupDrivers"
+if not exist "%DEST%" mkdir "%DEST%" >nul 2>&1
+set "DEST=%DEST%\%DATE:~6,4%-%DATE:~3,2%-%DATE:~0,2%_%TIME:~0,2%%TIME:~3,2%"
+set "DEST=%DEST: =0%"
+mkdir "%DEST%" >nul 2>&1
+echo [%DATE% %TIME%] pnputil /export-driver * "%DEST%" >> "%LOG%"
+pnputil /export-driver * "%DEST%"
+echo Concluido. Drivers exportados para: "%DEST%"
+pause
+goto :EOF
+
+:OPC_29
+echo Sincronizando hora com servidor (Windows Time)...
+echo [%DATE% %TIME%] w32tm /resync >> "%LOG%"
+net start w32time >nul 2>&1
+w32tm /resync
+w32tm /query /status
+pause
+goto :EOF
+
+:SAIR
+echo Saindo...
+echo [%DATE% %TIME%] Encerrado pelo usuario >> "%LOG%"
+timeout /t 1 >nul
+exit
